@@ -24,9 +24,8 @@ USE `mydb` ;
 DROP TABLE IF EXISTS `mydb`.`Cidades` ;
 
 CREATE TABLE IF NOT EXISTS `mydb`.`Cidades` (
-  `ID` INT NOT NULL,
-  `Nome` VARCHAR(45) NULL,
-  PRIMARY KEY (`ID`))
+  `Nome` VARCHAR(45) UNIQUE,
+  PRIMARY KEY (`Nome`))
 ENGINE = InnoDB;
 
 
@@ -36,15 +35,15 @@ ENGINE = InnoDB;
 DROP TABLE IF EXISTS `mydb`.`User` ;
 
 CREATE TABLE IF NOT EXISTS `mydb`.`User` (
-  `idUser` INT NOT NULL,
-  `Nome` VARCHAR(45) NULL,
-  `Email` VARCHAR(45) NULL,
-  `Cidades_ID` INT NOT NULL,
+  `idUser` INT NOT NULL AUTO_INCREMENT,
+  `Nome` VARCHAR(45) NOT NULL,
+  `Email` VARCHAR(45) NOT NULL,
+  `Cidade` VARCHAR(45) NOT NULL,
   PRIMARY KEY (`idUser`),
-  INDEX `fk_User_Cidades_idx` (`Cidades_ID` ASC) VISIBLE,
+  INDEX `fk_User_Cidades_idx` (`Cidade` ASC) VISIBLE,
   CONSTRAINT `fk_User_Cidades`
-    FOREIGN KEY (`Cidades_ID`)
-    REFERENCES `mydb`.`Cidades` (`ID`)
+    FOREIGN KEY (`Cidade`)
+    REFERENCES `mydb`.`Cidades` (`Nome`)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION)
 ENGINE = InnoDB;
@@ -56,7 +55,7 @@ ENGINE = InnoDB;
 DROP TABLE IF EXISTS `mydb`.`Passaros` ;
 
 CREATE TABLE IF NOT EXISTS `mydb`.`Passaros` (
-  `idPassaros` INT NOT NULL,
+  `idPassaros` INT NOT NULL AUTO_INCREMENT,
   `Nome` VARCHAR(45) NULL,
   PRIMARY KEY (`idPassaros`))
 ENGINE = InnoDB;
@@ -68,7 +67,7 @@ ENGINE = InnoDB;
 DROP TABLE IF EXISTS `mydb`.`Post` ;
 
 CREATE TABLE IF NOT EXISTS `mydb`.`Post` (
-  `idPost` INT NOT NULL,
+  `idPost` INT NOT NULL AUTO_INCREMENT,
   `Titulo` VARCHAR(45) NULL,
   `URL` VARCHAR(45) NULL,
   `Texto` VARCHAR(100) NULL,
@@ -97,13 +96,13 @@ CREATE TABLE IF NOT EXISTS `mydb`.`Passaro_User` (
   CONSTRAINT `fk_Passaro_User_User1`
     FOREIGN KEY (`User_idUser`)
     REFERENCES `mydb`.`User` (`idUser`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION,
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
   CONSTRAINT `fk_Passaro_User_Passaros1`
     FOREIGN KEY (`Passaros_idPassaros`)
     REFERENCES `mydb`.`Passaros` (`idPassaros`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
 
@@ -120,13 +119,13 @@ CREATE TABLE IF NOT EXISTS `mydb`.`Post_Passaro` (
   CONSTRAINT `fk_Post_Passaro_Passaros1`
     FOREIGN KEY (`Passaros_idPassaros`)
     REFERENCES `mydb`.`Passaros` (`idPassaros`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION,
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
   CONSTRAINT `fk_Post_Passaro_Post1`
     FOREIGN KEY (`Post_idPost`)
     REFERENCES `mydb`.`Post` (`idPost`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
 
@@ -143,13 +142,13 @@ CREATE TABLE IF NOT EXISTS `mydb`.`User_mencao_Post` (
   CONSTRAINT `fk_User_mencao_Post_User1`
     FOREIGN KEY (`User_idUser`)
     REFERENCES `mydb`.`User` (`idUser`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION,
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
   CONSTRAINT `fk_User_mencao_Post_Post1`
     FOREIGN KEY (`Post_idPost`)
     REFERENCES `mydb`.`Post` (`idPost`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
 
