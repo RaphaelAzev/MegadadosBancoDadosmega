@@ -1,2 +1,3 @@
 # MegadadosBancoDadosmega
 ProjetoMegadados
+![](Diagrama.jpeg)
