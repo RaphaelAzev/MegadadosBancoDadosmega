@@ -7,7 +7,8 @@ import re
 import subprocess
 import unittest
 import pymysql
-
+from datetime import datetime
+import time
 from projeto import *
 
 class TestProjeto(unittest.TestCase):
@@ -35,6 +36,7 @@ class TestProjeto(unittest.TestCase):
         with conn.cursor() as cursor:
             cursor.execute('ROLLBACK')
 
+    
    #USER
 
     def test_adiciona_usuario(self): 
@@ -44,6 +46,8 @@ class TestProjeto(unittest.TestCase):
         nome = "Joao"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+
+        adiciona_cidade(conn, cidade)
         # Adiciona um usuario não existente.
         adiciona_usuario(conn, nome, email, cidade)
 
@@ -51,22 +55,15 @@ class TestProjeto(unittest.TestCase):
         id = acha_usuario(conn, nome)
         self.assertIsNotNone(id)
 
-        #O teste da adição de cidade também é feito aqui pois elas só são adicionadas quando se adiciona um novo usuário
-        #Checa se a cidade foi adicionadas
-        id = acha_cidade(conn, 'Sao Paulo')
-        self.assertIsNotNone(id)
 
         # Tenta achar um usuario inexistente.
         id = acha_usuario(conn, 'Maria')
         self.assertIsNone(id)
 
-        #Tenta achar uma cidade inexistente
-        id = acha_cidade(conn, 'Campinas')
-        self.assertIsNone(id)
-
     def test_remove_usuario(self):
         conn = self.__class__.connection
         c = "Sao Paulo"
+        adiciona_cidade(conn, c)
         adiciona_usuario(conn, 'Carlos',"Carlos@Carlos.br",c)
         id_user = acha_usuario(conn, 'Carlos')
 
@@ -81,6 +78,7 @@ class TestProjeto(unittest.TestCase):
     def test_muda_nome_usuario(self):
         conn = self.__class__.connection
         c = "Sao Paulo"
+        adiciona_cidade(conn, c)
         adiciona_usuario(conn, 'José',"José@José.br",c)
 
         adiciona_usuario(conn, 'Amdré',"Carlos@Carlos.br",c)
@@ -104,6 +102,7 @@ class TestProjeto(unittest.TestCase):
         usuarios_id = []
         email = "email@email.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         for u in ('Mario', 'Luigi', 'Vitor'):
             adiciona_usuario(conn, u,email,cidade)
             usuarios_id.append(acha_usuario(conn, u))
@@ -120,6 +119,89 @@ class TestProjeto(unittest.TestCase):
         res = lista_usuarios(conn)
         self.assertFalse(res)
 
+    def test_usuarios_mais_citados_por_cidade(self):
+        conn = self.__class__.connection
+
+        # Verifica que ainda não tem usuarios no sistema.
+        res = lista_usuarios(conn)
+        self.assertFalse(res)
+
+        # Adiciona alguns usuarios.
+        usuarios_id = []
+        email = "email@email.br"
+        cidade = ["Sao Paulo", "Sao Paulo", "Sao Paulo", "Sao Paulo", "Rio de Janeiro", "Maceió"]
+        adiciona_cidade(conn, cidade[0])
+        adiciona_cidade(conn, cidade[5])
+        adiciona_cidade(conn, cidade[4])
+        i=0
+        for u in ('Mario', 'Luigi', 'Vitor', 'Ana', 'José', 'Alfredo'):
+            adiciona_usuario(conn, u,email,cidade[i])
+            usuarios_id.append(acha_usuario(conn, u))
+            i+=1
+
+       #Adiciona comentários com citações entre usuarios
+        adiciona_post(conn,  usuarios_id[4],"Exemplo1", Texto = "@Mario")
+        adiciona_post_menciona_usuario(conn,usuarios_id[0], acha_post_portitulo(conn, "Exemplo1"))
+
+        adiciona_post(conn,  usuarios_id[0],"Exemplo2", Texto = "@Luigi")
+        adiciona_post_menciona_usuario(conn,usuarios_id[1], acha_post_portitulo(conn, "Exemplo2"))
+
+        adiciona_post(conn,  usuarios_id[5],"Exemplo3", Texto = "@Luigi")
+        adiciona_post_menciona_usuario(conn,usuarios_id[1], acha_post_portitulo(conn, "Exemplo3"))
+
+        adiciona_post(conn,  usuarios_id[4],"Exemplo4", Texto = "@Vitor")
+        adiciona_post_menciona_usuario(conn,usuarios_id[2], acha_post_portitulo(conn, "Exemplo4"))
+
+        adiciona_post(conn,  usuarios_id[0],"Exemplo5", Texto = "@Vitor")
+        adiciona_post_menciona_usuario(conn,usuarios_id[2], acha_post_portitulo(conn, "Exemplo5"))
+
+        adiciona_post(conn,  usuarios_id[1],"Exemplo6", Texto = "@Vitor")
+        adiciona_post_menciona_usuario(conn,usuarios_id[2], acha_post_portitulo(conn, "Exemplo6"))
+
+        adiciona_post(conn,  usuarios_id[3],"Exemplo7", Texto = "@Vitor")
+        adiciona_post_menciona_usuario(conn,usuarios_id[2], acha_post_portitulo(conn, "Exemplo7"))
+
+        adiciona_post(conn,  usuarios_id[0],"Exemplo8", Texto = "@José")
+        adiciona_post_menciona_usuario(conn,usuarios_id[4], acha_post_portitulo(conn,"Exemplo8" ))
+
+        adiciona_post(conn,  usuarios_id[1],"Exemplo9", Texto = "@José")
+        adiciona_post_menciona_usuario(conn,usuarios_id[4], acha_post_portitulo(conn, "Exemplo9"))
+
+        adiciona_post(conn,  usuarios_id[2],"Exemplo10", Texto = "@José")
+        adiciona_post_menciona_usuario(conn,usuarios_id[4], acha_post_portitulo(conn, "Exemplo10"))
+
+        adiciona_post(conn,  usuarios_id[3],"Exemplo11", Texto = "@José")
+        adiciona_post_menciona_usuario(conn,usuarios_id[4], acha_post_portitulo(conn, "Exemplo11"))
+
+        adiciona_post(conn,  usuarios_id[5],"Exemplo12", Texto = "@José")
+        adiciona_post_menciona_usuario(conn,usuarios_id[4], acha_post_portitulo(conn, "Exemplo12"))
+
+       #Lista esperada de resultado pra a pesquisa de mais citados em Sao Paulo
+        Esperado=[usuarios_id[2],usuarios_id[1],usuarios_id[0]]
+
+       # Verifica se o resultado bate com o esperado
+        res = list(usuarios_mais_citados_por_cidade(conn, "Sao Paulo"))
+        j=0
+        for i in res:
+            res[j]=acha_usuario(conn, i)
+            j+=1
+        self.assertEqual(res, Esperado)
+
+   #CIDADES
+
+    def test_adiciona_cidade(self):
+        conn = self.__class__.connection
+        
+        adiciona_cidade(conn, 'Sao Paulo')
+
+        #Checa se a cidade foi adicionadas
+        cidade = acha_cidade(conn, 'Sao Paulo')
+        self.assertIsNotNone(cidade)
+
+        #Tenta achar uma cidade inexistente
+        cidade = acha_cidade(conn, 'Campinas')
+        self.assertIsNone(cidade)
+   
    #PASSARO
 
     def test_adiciona_passaro(self):
@@ -186,12 +268,13 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id = acha_usuario(conn, nome)
 
         # Adiciona Posts feitos por Jõao
         adiciona_post(conn,  id, "Comidas")
-        #adiciona_post(conn, "Coisas", "Roda e Corda", id)
+  
 
        
         # Checa se o Post existe.
@@ -209,6 +292,38 @@ class TestProjeto(unittest.TestCase):
         
         #self.assertEqual(acha_post_porid(conn, 2), "Coisas")  
 
+    def test_adiciona_post_parser(self):
+        conn = self.__class__.connection
+
+
+        # Adiciona 2 usuários.
+        nome = "João"
+        email = "Joao@Joao.br"
+        cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
+        adiciona_usuario(conn, nome, email, cidade)
+        id1 = acha_usuario(conn, nome)
+
+        nome = "Delch"
+        email = "Delch@Delch.br"
+        adiciona_usuario(conn, nome, email, cidade)
+        id2 = acha_usuario(conn, nome)
+
+        # Adiciona passaro
+        adiciona_passaro(conn, "TicoTico")
+
+        # Adiciona Post
+        adiciona_post_parseia_mencoes(conn,  id1, "Comidas", "@Delch comeu uma torrada de #TicoTico")
+        postid = acha_post_portitulo(conn, "Comidas")
+
+        res = lista_passaros_mencionados_em_post(conn, postid)
+        self.assertEqual(res[0], acha_passaro(conn, "TicoTico"))
+
+        res = lista_usuarios_mencionados_em_post(conn, postid)
+        self.assertEqual(res[0], acha_usuario(conn, "Delch"))
+
+
+
     def test_remove_post(self):
         conn = self.__class__.connection
         
@@ -216,6 +331,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id = acha_usuario(conn, nome)
 
@@ -233,6 +349,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id = acha_usuario(conn, nome)
 
@@ -257,6 +374,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         idjoao = acha_usuario(conn, nome)
 
@@ -266,8 +384,10 @@ class TestProjeto(unittest.TestCase):
 
         lista = []
         # Adiciona alguns posts
+        
         for u in ('Serta', 'Funk', 'SertaFunk'):
-            adiciona_post(conn, idjoao, u )
+            
+            adiciona_post(conn, idjoao, u)
             lista.append("oi")
 
         # Verifica se tem a mesma quantidade de posts entre a lista e o banco
@@ -290,6 +410,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         idjoao = acha_usuario(conn, nome)
 
@@ -323,6 +444,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         idjoao = acha_usuario(conn, nome)
 
@@ -344,6 +466,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         idjoao = acha_usuario(conn, nome)
 
@@ -359,6 +482,52 @@ class TestProjeto(unittest.TestCase):
         #raise ValueError(f'{res}')
         self.assertEqual(res[0][3], "Olagangnam")
 
+    def test_lista_posts_usuario_em_ordem_cronologica(self):
+        conn = self.__class__.connection
+        #Adiciona o famigerado Joao
+        nome = "João"
+        email = "Joao@Joao.br"
+        cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
+        adiciona_usuario(conn, nome, email, cidade)
+        idjoao = acha_usuario(conn, nome)
+
+        # Verifica que ainda não tem posts no sistema.
+        res = lista_posts(conn)
+        self.assertFalse(res)
+
+        lista = []
+        lista_timestamps=[datetime(2018,12,25, 9,27,53), datetime(2018,12,25, 9,27,54),datetime(2018,12,25, 9,27,55)]
+
+        #Adiciona posts com timestamps bagunçados
+        adiciona_post(conn, idjoao, 'SertaFunk', TimeStamp=lista_timestamps[1])
+        
+        adiciona_post(conn, idjoao, 'Serta', TimeStamp=lista_timestamps[2])
+        
+        adiciona_post(conn, idjoao, 'Funk', TimeStamp=lista_timestamps[0])
+        
+
+        #Espera-se a ordem Funk, SertaFunk, Serta vide ordem dos timestamps
+        lista.append(acha_post_portitulo(conn, 'Funk'))
+        lista.append(acha_post_portitulo(conn, 'SertaFunk'))
+        lista.append(acha_post_portitulo(conn, 'Serta'))
+        
+
+
+        # Verifica se os posts estao na ordem correta
+        res = lista_posts_usuario_em_ordem_cronologica(conn, idjoao)
+        self.assertEqual(list(res), lista)
+        self.assertNotEqual(list(res), reversed(lista))
+
+        # Remove os posts.
+        for u in ('Serta', 'Funk', 'SertaFunk'):
+            idpost = acha_post_portitulo(conn, u)
+            remove_post(conn, idpost)
+
+        # Verifica que todos os posts foram removidos.
+        res = lista_posts(conn)
+        self.assertEqual(len(res), 0)
+    
    #PASSARO-USER
 
     def test_adiciona_passaro_favorito(self):
@@ -368,6 +537,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id = acha_usuario(conn, nome)
 
@@ -390,6 +560,7 @@ class TestProjeto(unittest.TestCase):
     def test_remove_passaro_user(self):
         conn = self.__class__.connection
         c = "Sao Paulo"
+        adiciona_cidade(conn, c)
         adiciona_usuario(conn, 'Carlos',"Carlos@Carlos.br",c)
         id_user = acha_usuario(conn, 'Carlos')
         
@@ -414,6 +585,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id = acha_usuario(conn, nome)
 
@@ -458,6 +630,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id_user = acha_usuario(conn, nome)
 
@@ -484,6 +657,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id_user = acha_usuario(conn, nome)
 
@@ -515,6 +689,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id = acha_usuario(conn, nome)
 
@@ -548,11 +723,11 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id_user1 = acha_usuario(conn, nome)
         nome = "Maria"
         email = "Maria@Maria.br"
-        cidade = "Sao Paulo"
         adiciona_usuario(conn, nome, email, cidade)
         id_user2 = acha_usuario(conn, nome)
 
@@ -580,6 +755,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id_user1 = acha_usuario(conn, nome)
 
@@ -619,6 +795,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id_user1 = acha_usuario(conn, nome)
 
@@ -656,6 +833,49 @@ class TestProjeto(unittest.TestCase):
         res = lista_posts_que_mencionam_usuario(conn, id_user1)
         self.assertCountEqual(lista, res)
 
+    def test_lista_usuarios_mencionam_usuario(self):
+        conn = self.__class__.connection
+
+        # Verifica que ainda não tem usuarios no sistema.
+        res = lista_usuarios(conn)
+        self.assertFalse(res)
+
+        # Adiciona alguns usuarios.
+        usuarios_id = []
+        email = "email@email.br"
+        cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
+        for u in ('Mario', 'Luigi', 'Vitor', 'Ana', 'José', 'Alfredo'):
+            adiciona_usuario(conn, u,email,cidade)
+            usuarios_id.append(acha_usuario(conn, u))
+
+       #Adiciona comentários com citações entre usuarios    
+        adiciona_post(conn,  usuarios_id[0],"Exemplo1", Texto = "@Vitor")
+        adiciona_post_menciona_usuario(conn,usuarios_id[2], acha_post_portitulo(conn, "Exemplo1"))
+
+        adiciona_post(conn,  usuarios_id[1],"Exemplo2", Texto = "@Vitor")
+        adiciona_post_menciona_usuario(conn,usuarios_id[2], acha_post_portitulo(conn, "Exemplo2"))
+
+        adiciona_post(conn,  usuarios_id[2],"Exemplo3", Texto = "@José")
+        adiciona_post_menciona_usuario(conn,usuarios_id[4], acha_post_portitulo(conn, "Exemplo3"))
+
+        adiciona_post(conn,  usuarios_id[3],"Exemplo4", Texto = "@Vitor")
+        adiciona_post_menciona_usuario(conn,usuarios_id[2], acha_post_portitulo(conn, "Exemplo4"))
+
+        adiciona_post(conn,  usuarios_id[4],"Exemplo5", Texto = "@Alfredo")
+        adiciona_post_menciona_usuario(conn,usuarios_id[5], acha_post_portitulo(conn, "Exemplo5"))
+
+        adiciona_post(conn,  usuarios_id[5],"Exemplo6", Texto = "@Ana")
+        adiciona_post_menciona_usuario(conn,usuarios_id[3], acha_post_portitulo(conn, "Exemplo6"))
+
+
+        #Lista esperada de resultado pra a pesquisa para usuarios que citam Vitor
+        EsperadoNomes=['Mario', 'Luigi', 'Ana']
+
+        res = list(lista_usuarios_mencionam_usuario(conn, usuarios_id[2]))
+
+        self.assertCountEqual(res, EsperadoNomes)
+
    #USUARIO-VIZUALIZA-POST
 
     def test_adiciona_vizualizacao(self):
@@ -665,11 +885,11 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id_user1 = acha_usuario(conn, nome)
         nome = "Maria"
         email = "Maria@Maria.br"
-        cidade = "Sao Paulo"
         adiciona_usuario(conn, nome, email, cidade)
         id_user2 = acha_usuario(conn, nome)
 
@@ -694,6 +914,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id_user1 = acha_usuario(conn, nome)
 
@@ -735,6 +956,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id_user1 = acha_usuario(conn, nome)
 
@@ -772,6 +994,131 @@ class TestProjeto(unittest.TestCase):
         res = lista_vizualizacoes_de_usuario(conn, id_user4)
         self.assertCountEqual(lista, res)
 
+   #LISTAGENS INTER-TABELAS
+    def test_lista_passaros_por_url(self):
+        conn = self.__class__.connection
+
+        # Adiciona um usuário.
+        cidade = "Sao Paulo"
+
+        adiciona_cidade(conn, cidade)
+        nome = "João"
+        email = "Joao@Joao.br"
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user = acha_usuario(conn, nome)
+
+        #Adiciona Passaros
+        passaros_id=[]
+        for u in ('Chitao', 'Xororo', 'Tico-Tico','Bem-Te-Vi','Pica-Pau','Pinguim'):
+            adiciona_passaro(conn, u)
+            passaros_id.append(acha_passaro(conn, u))   
+
+       #Adiciona posts com Urls e citaçoes para passaros
+        adiciona_post(conn, id_user, "Post0", Texto= "#Chitao")
+        adiciona_post_menciona_passaro(conn, passaros_id[0], acha_post_portitulo(conn, "Post0"))
+        #Esperado dessa adição: (Chitao, None) pois não foi colocada nenhuma URL mas o passaro foi citado
+
+        adiciona_post(conn, id_user, "Post1", Texto= "#Pinguim e #Xororo",Url="Passaros.com")
+        adiciona_post_menciona_passaro(conn, passaros_id[5], acha_post_portitulo(conn, "Post1"))
+        adiciona_post_menciona_passaro(conn, passaros_id[1], acha_post_portitulo(conn, "Post1"))
+        #Esperado dessa adição: (Pinguim, Passaros.com) e (Xororo ,Passaros.com)
+
+        adiciona_post(conn, id_user, "Post2", Texto= "#Chitao",Url="Passaros.com")
+        adiciona_post_menciona_passaro(conn, passaros_id[0], acha_post_portitulo(conn, "Post2"))
+        #Esperado dessa adição: (Chitao, Passaros.com)
+
+        adiciona_post(conn, id_user, "Post3", Texto= "#Pinguim",Url="Passaros.net")
+        adiciona_post_menciona_passaro(conn, passaros_id[5], acha_post_portitulo(conn, "Post3"))
+        #Esperado dessa adição: (Pinguim, Passaros.net)
+
+        adiciona_post(conn, id_user, "Post4", Texto= "#Pinguim",Url="Passaros.net")
+        adiciona_post_menciona_passaro(conn, passaros_id[5], acha_post_portitulo(conn, "Post4"))
+        #Esperado dessa adição: (Pinguim, Passaros.net)
+
+        adiciona_post(conn, id_user, "Post5", Texto= "#Chitao e #Bem-Te-Vi",Url="Passaros.net")
+        adiciona_post_menciona_passaro(conn, passaros_id[0], acha_post_portitulo(conn, "Post5"))
+        adiciona_post_menciona_passaro(conn, passaros_id[3], acha_post_portitulo(conn, "Post5"))
+        #Esperado dessa adição: (Chitao, Passaros.net) e (Bem-Te-Vi, Passaros.net)
+
+        adiciona_post(conn, id_user, "Post6", Texto= "#Bem-Te-Vi",Url="Passaros.net")
+        adiciona_post_menciona_passaro(conn, passaros_id[3], acha_post_portitulo(conn, "Post6"))
+        #Esperado dessa adição: (Bem-Te-Vi, Passaros.net)
+
+        adiciona_post(conn, id_user, "Post7", Texto= "#Bem-Te-Vi",Url="ensino.hashi.pro.br")
+        adiciona_post_menciona_passaro(conn, passaros_id[3], acha_post_portitulo(conn, "Post7"))
+        #Esperado dessa adição: (Bem-Te-Vi, ensino.hashi.pro.br)
+
+        adiciona_post(conn, id_user, "Post8", Texto= "#Xororo",Url="ensino.hashi.pro.br")
+        adiciona_post_menciona_passaro(conn, passaros_id[1], acha_post_portitulo(conn, "Post8"))
+        #Esperado dessa adição: (Xororo, ensino.hashi.pro.br)
+
+        adiciona_post(conn, id_user, "Post9", Texto= "#Xororo",Url="youtube.com/PewDiePie")
+        adiciona_post_menciona_passaro(conn, passaros_id[1], acha_post_portitulo(conn, "Post9"))
+        #Esperado dessa adição: (Xororo, www.youtube.com/PewDiePie)
+
+        adiciona_post(conn, id_user, "Post10",Url="Seila.com")
+        #Nada pois nenhum passaro foi citado
+
+        #Para o resultado esperado pegamos todas as adições inclusive duplicatas
+        Resultado_esperado= (('Chitao', None), ('Pinguim', 'Passaros.com'), ('Xororo' ,'Passaros.com'), ('Chitao', 'Passaros.com'),
+        ('Pinguim', 'Passaros.net'),('Pinguim', 'Passaros.net'), ('Chitao', 'Passaros.net'), ('Bem-Te-Vi', 'Passaros.net'), ('Bem-Te-Vi', 'Passaros.net'),
+        ('Bem-Te-Vi', 'ensino.hashi.pro.br'),('Xororo', 'ensino.hashi.pro.br'), ('Xororo', 'youtube.com/PewDiePie'))
+
+       #Checa se a tabela está precisa
+        res=lista_passaros_por_url(conn)
+        self.assertCountEqual(Resultado_esperado,res)
+
+
+    def test_quantidade_de_tipo_de_aparelho_por_browser(self):
+        conn = self.__class__.connection
+
+        # Adiciona um usuário.
+        cidade = "Sao Paulo"
+
+        adiciona_cidade(conn, cidade)
+        nome = "João"
+        email = "Joao@Joao.br"
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user1 = acha_usuario(conn, nome)
+
+        nome = "Maria"
+        email = "Maria@Maria.br"
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user2 = acha_usuario(conn, nome)
+
+        nome = "Carlos"
+        email = "Carlos@Carlos.br"
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user3 = acha_usuario(conn, nome)
+
+        # Adiciona posts
+        adiciona_post(conn, id_user1, "PostJ")
+        adiciona_post(conn, id_user2, "PostM")
+
+        # Verifica que ainda não tem usuario no sistema.
+        res = lista_vizualizacoes_de_usuario(conn, id_user2)
+        self.assertFalse(res) 
+
+        #Faz Carlos vizualizar o post de João e de Maria de varios Browsers diferentes usando ambos os aparelhos
+        adiciona_vizualizacao_em_post(conn, id_user3,  acha_post_portitulo(conn, 'PostJ'), Browser = "Chrome", Aparelho = "IOS")
+        adiciona_vizualizacao_em_post(conn, id_user3,  acha_post_portitulo(conn, 'PostJ'), Browser = "Chrome", Aparelho = "Android")
+        adiciona_vizualizacao_em_post(conn, id_user3,  acha_post_portitulo(conn, 'PostJ'), Browser = "Opera", Aparelho = "Android")
+        adiciona_vizualizacao_em_post(conn, id_user3,  acha_post_portitulo(conn, 'PostJ'), Browser = "Chrome", Aparelho = "IOS")
+        adiciona_vizualizacao_em_post(conn, id_user3,  acha_post_portitulo(conn, 'PostJ'), Browser = "FireFox", Aparelho = "Android")
+        adiciona_vizualizacao_em_post(conn, id_user3,  acha_post_portitulo(conn, 'PostM'), Browser = "Safari", Aparelho = "IOS")
+        adiciona_vizualizacao_em_post(conn, id_user3,  acha_post_portitulo(conn, 'PostM'), Browser = "Chrome", Aparelho = "Android")
+        adiciona_vizualizacao_em_post(conn, id_user3,  acha_post_portitulo(conn, 'PostM'), Browser = "Chrome", Aparelho = "Android")
+        adiciona_vizualizacao_em_post(conn, id_user3,  acha_post_portitulo(conn, 'PostM'), Browser = "Safari", Aparelho = "IOS")
+
+        # Chrome em Android:3, 
+        # Opera em Android:1, 
+        # FireFox em Android: 1,
+        # Safari em IOS: 2
+        # Chrome em IOS:2, 
+        Objetivo=(('Chrome', 'Android', 3), ('Opera', 'Android', 1), ('FireFox', 'Android', 1), ('Safari', 'IOS', 2),('Chrome', 'IOS', 2))
+        res= quantidade_de_tipo_de_aparelho_por_browser(conn)
+        self.assertCountEqual(Objetivo, res) 
+          
    #TRIGGERS 
     def test_trigger_delecao_post_passaro(self):
         conn = self.__class__.connection
@@ -780,6 +1127,7 @@ class TestProjeto(unittest.TestCase):
         nome = "João"
         email = "Joao@Joao.br"
         cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
         adiciona_usuario(conn, nome, email, cidade)
         id_user1 = acha_usuario(conn, nome)
 
@@ -800,6 +1148,123 @@ class TestProjeto(unittest.TestCase):
 
         res = lista_posts_passaros(conn)
         self.assertEqual(res[0][2], "False")
+
+   #USER-CURTE-POST
+    def test_adiciona_curtidas_e_descurtidas(self):
+        conn = self.__class__.connection     
+        
+        # Adiciona dois usuário.
+        nome = "João"
+        email = "Joao@Joao.br"
+        cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user1 = acha_usuario(conn, nome)
+        nome = "Maria"
+        email = "Maria@Maria.br"
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user2 = acha_usuario(conn, nome)
+        nome = "Mario"
+        email = "Mario@Mario.br"
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user3 = acha_usuario(conn, nome)
+
+
+        #Faz o post
+        adiciona_post(conn, id_user1,"Curtir" )
+
+        like_post(conn, id_user2, acha_post_portitulo(conn,"Curtir"))
+
+        dislike_post(conn, id_user3, acha_post_portitulo(conn,"Curtir"))
+
+        self.assertEqual(acha_curtida_de_usuario_em_post(conn, id_user2, acha_post_portitulo(conn,"Curtir")), 1)
+
+        self.assertEqual(acha_curtida_de_usuario_em_post(conn, id_user3, acha_post_portitulo(conn,"Curtir")), -1)
+
+    def test_edição_de_curtidas(self):
+        conn = self.__class__.connection     
+        
+        # Adiciona dois usuário.
+        nome = "João"
+        email = "Joao@Joao.br"
+        cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user1 = acha_usuario(conn, nome)
+        nome = "Maria"
+        email = "Maria@Maria.br"
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user2 = acha_usuario(conn, nome)
+
+
+        #Faz o post
+        adiciona_post(conn, id_user1,"Curtir1" )
+        idpost1=acha_post_portitulo(conn,"Curtir1")
+        adiciona_post(conn, id_user1,"Curtir2" )
+        idpost2=acha_post_portitulo(conn,"Curtir2")
+
+        like_post(conn, id_user2, idpost1)
+
+        dislike_post(conn, id_user2,idpost2 )
+
+
+        muda_para_dislike(conn, id_user2, idpost1)
+        self.assertEqual(acha_curtida_de_usuario_em_post(conn, id_user2, idpost1), -1)
+        zera_estado_da_curtida(conn, id_user2, idpost1)
+        self.assertEqual(acha_curtida_de_usuario_em_post(conn, id_user2, idpost1), 0)
+
+        muda_para_like(conn, id_user2, idpost2)
+        self.assertEqual(acha_curtida_de_usuario_em_post(conn, id_user2, idpost2), 1)
+        zera_estado_da_curtida(conn, id_user2, idpost2)
+        self.assertEqual(acha_curtida_de_usuario_em_post(conn, id_user2, idpost2), 0)
+
+    def test_contador_de_likes(self):
+        conn = self.__class__.connection     
+        
+        # Adiciona dois usuário.
+        nome = "João"
+        email = "Joao@Joao.br"
+        cidade = "Sao Paulo"
+        adiciona_cidade(conn, cidade)
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user1 = acha_usuario(conn, nome)
+        nome = "Maria"
+        email = "Maria@Maria.br"
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user2 = acha_usuario(conn, nome)
+        nome = "Mario"
+        email = "Mario@Mario.br"
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user3 = acha_usuario(conn, nome)
+        nome = "Luigi"
+        email = "Luigi@Luigi.br"
+        adiciona_usuario(conn, nome, email, cidade)
+        id_user4 = acha_usuario(conn, nome)
+
+        #Faz o post
+        adiciona_post(conn, id_user1,"Curtir" )
+        adiciona_post(conn, id_user1,"Descurtir" )
+
+        idpost1=acha_post_portitulo(conn,"Curtir")
+        idpost2=acha_post_portitulo(conn,"Descurtir")
+
+
+        self.assertEqual(conta_likes_em_post(conn, idpost1), (0,))
+        like_post(conn, id_user2, idpost1)
+        self.assertEqual(conta_likes_em_post(conn,idpost1), (1,))
+        like_post(conn, id_user3, idpost1)
+        self.assertEqual(conta_likes_em_post(conn, idpost1), (2,))
+        like_post(conn, id_user4, idpost1)
+        self.assertEqual(conta_likes_em_post(conn, idpost1), (3,))
+
+
+        self.assertEqual(conta_dislikes_em_post(conn, idpost2), (0,))
+        dislike_post(conn, id_user2, idpost2)
+        self.assertEqual(conta_dislikes_em_post(conn, idpost2), (1,))
+        dislike_post(conn, id_user3, idpost2)
+        self.assertEqual(conta_dislikes_em_post(conn, idpost2), (2,))
+        dislike_post(conn, id_user4, idpost2)
+        self.assertEqual(conta_dislikes_em_post(conn, idpost2),  (3,))
 
 
 

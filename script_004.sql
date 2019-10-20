@@ -1,0 +1,4 @@
+USE `mydb` ;
+
+ALTER TABLE post
+ADD COLUMN TimeStamp TIMESTAMP NULL;

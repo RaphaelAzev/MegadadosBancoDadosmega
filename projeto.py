@@ -1,11 +1,35 @@
 import pymysql
 
+#Funçao do parseiro
+
+def parseCommentario(comment):
+	commentSplit = comment.split()
+	dicChar = ['?', '!', ".", ","]# , "@", "#"]
+	wordList = [[], []]
+
+	for word in commentSplit:
+		if word.find('@') != -1:
+			person = word.partition('@')
+			person = person[2]
+			for charac in dicChar:
+				if charac in person:
+					person = person.replace(charac, '')
+			wordList[0].append(person)
+
+		if word.find('#') != -1:
+			bird = word.partition('#')
+			bird = bird[2]
+			for charac in dicChar:
+				if charac in bird:
+					bird = bird.replace(charac, '')
+			wordList[1].append(bird)
+
+	return wordList
 #FUNÇÕES USUARIO
 
 def adiciona_usuario(conn, nome, email, cidade):
     with conn.cursor() as cursor:
         try:
-            adiciona_cidade(conn, cidade)
             cursor.execute('INSERT INTO user (Nome,Email,Cidade) VALUES((%s),(%s),(%s))', (nome,email,cidade))
         except pymysql.err.IntegrityError as e:
             raise ValueError(f'Não posso inserir {nome} na tabela user')
@@ -33,6 +57,21 @@ def remove_usuario(conn, id):
 def lista_usuarios(conn):
     with conn.cursor() as cursor:
         cursor.execute('SELECT idUser from user')
+        res = cursor.fetchall()
+        usuarios = tuple(x[0] for x in res)
+        return usuarios
+
+def usuarios_mais_citados_por_cidade(conn, cidade):
+    with conn.cursor() as cursor:
+        cursor.execute('''
+            SELECT Nome, COUNT(*) as cnt 
+            FROM user 
+            INNER JOIN User_mencao_Post ON (User_mencao_Post.User_idUser=user.idUser) 
+            WHERE Cidade = (%s) 
+            GROUP BY Cidade,idUser 
+            ORDER BY cnt DESC 
+            LIMIT 3
+            ''',cidade)
         res = cursor.fetchall()
         usuarios = tuple(x[0] for x in res)
         return usuarios
@@ -86,10 +125,31 @@ def remove_passaro(conn, id):
 
 #FUNÇÕES POST
 
-def adiciona_post(conn, iduser, titulo, Texto=None, Url=None):
+def adiciona_post(conn, iduser, titulo, Texto=None, Url=None, TimeStamp=None):
     with conn.cursor() as cursor:
         try:
-            cursor.execute('INSERT INTO Post (Titulo,Url,Texto,Ativo,User_idUser) VALUES (%s, %s, %s , %s, %s)' , (titulo, Url, Texto, "True", iduser))
+            cursor.execute('INSERT INTO Post (Titulo,Url,Texto,Ativo,User_idUser,TimeStamp) VALUES (%s, %s, %s , %s, %s,%s)' , (titulo, Url, Texto, "True", iduser,TimeStamp))
+
+        except pymysql.err.IntegrityError as e:
+            raise ValueError(f'Não foi possível inserir o post do usuario de id {iduser} na tabela Post')
+
+def adiciona_post_parseia_mencoes(conn, iduser, titulo, Texto=None, Url=None, TimeStamp=None):
+    with conn.cursor() as cursor:
+        try:
+            cursor.execute('INSERT INTO Post (Titulo,Url,Texto,Ativo,User_idUser,TimeStamp) VALUES (%s, %s, %s , %s, %s,%s)' , (titulo, Url, Texto, "True", iduser,TimeStamp))
+            if (Texto != None):
+                TagsMenc = parseCommentario(Texto)
+                postid = acha_post_portitulo(conn, titulo)
+                if len(TagsMenc[0]) != 0:
+                    for user in TagsMenc[0]:
+                        cursor.execute('SELECT idUser FROM user WHERE Nome = %s', user)
+                        userMencid = cursor.fetchone()
+                        adiciona_post_menciona_usuario(conn, userMencid[0], postid)
+                if len(TagsMenc[1]) != 0:
+                    for bird in TagsMenc[1]:
+                        cursor.execute('SELECT idPassaros FROM Passaros WHERE Nome = %s', bird)
+                        birdMencid = cursor.fetchone()
+                        adiciona_post_menciona_passaro(conn, birdMencid[0], postid)
         except pymysql.err.IntegrityError as e:
             raise ValueError(f'Não foi possível inserir o post do usuario de id {iduser} na tabela Post')
 
@@ -162,6 +222,14 @@ def edita_post_URL(conn, idpost, novo_URL):
         except pymysql.err.IntegrityError as e:
             raise ValueError(f'Não foi possível alterar a URL do Post de id: {idpost} para {novo_URL}')  
 
+def lista_posts_usuario_em_ordem_cronologica(conn, iduser):
+    with conn.cursor() as cursor:
+        cursor.execute('SELECT * FROM Post WHERE User_idUser=%s AND Ativo = "True" ORDER BY TimeStamp' , (iduser))
+        res = cursor.fetchall()
+        Posts = tuple(x[0] for x in res)
+        return Posts
+
+
 #FUNÇÕES PASSARO-USUARIO
 
 def adiciona_passaro_favorito(conn, id_usuario, passaro):
@@ -181,19 +249,19 @@ def remove_passaro_favorito(conn, id_usuario, passaro):
         except pymysql.err.IntegrityError as e:
             raise ValueError(f'Não posso inserir {passaro} e ao usuario de id {id_usuario} na tabela Passaro_User')
 
-def acha_passaro_favoritos(conn, id, passaro):
+def acha_passaro_favoritos(conn, idp, passaro):
     with conn.cursor() as cursor:
         
-        cursor.execute('SELECT Passaros_idPassaros FROM Passaro_User WHERE (User_idUser=%s) AND (Passaros_idPassaros=%s)', (id,acha_passaro(conn, passaro)))
+        cursor.execute('SELECT Passaros_idPassaros FROM Passaro_User WHERE (User_idUser=%s) AND (Passaros_idPassaros=%s)', (idp,acha_passaro(conn, passaro)))
         res = cursor.fetchone()
         if res:
             return res[0]
         else:
             return None
 
-def lista_passaros_favoritos(conn, id):
+def lista_passaros_favoritos(conn, idp):
     with conn.cursor() as cursor:
-        cursor.execute('SELECT Passaros_idPassaros from Passaro_User  WHERE User_idUser = %s', (id))
+        cursor.execute('SELECT Passaros_idPassaros from Passaro_User  WHERE User_idUser = %s', (idp))
         res = cursor.fetchall()
         Passaros = tuple(x[0] for x in res)
         return Passaros
@@ -236,6 +304,18 @@ def lista_posts_passaros(conn):
         res = cursor.fetchall()
         return res
 
+def lista_passaros_por_url(conn):
+    with conn.cursor() as cursor:
+        cursor.execute('''
+        SELECT Passaros.Nome, Post.Url
+        FROM Passaros
+        INNER JOIN Post_Passaro ON  (idPassaros=Passaros_idPassaros)
+        INNER JOIN Post ON (idPost=Post_idPost) 
+        ''')
+        res = cursor.fetchall()
+        #Passaros = tuple(x[0] for x in res)
+        return res
+
 #FUNCÕES USUARIO-MENCIONA-USUARIO-EM-POST
 
 def adiciona_post_menciona_usuario(conn, user, post):
@@ -267,6 +347,20 @@ def lista_posts_que_mencionam_usuario(conn, id_user):
         res = cursor.fetchall()
         Posts = tuple(x[0] for x in res)
         return Posts
+
+def lista_usuarios_mencionam_usuario(conn, id_user):
+        with conn.cursor() as cursor:
+            cursor.execute('''
+            SELECT Nome 
+            FROM user 
+            INNER JOIN post ON (idUser=post.User_idUser) 
+            INNER JOIN user_mencao_post ON (idPost=Post_idPost) 
+            WHERE user_mencao_post.User_idUser=%s'''
+            , id_user)
+            res = cursor.fetchall()
+            users = tuple(x[0] for x in res)
+            return users
+
 #FUNCÕES USUARIO-VIZUALIZA-POST
 
 def adiciona_vizualizacao_em_post(conn, user, post, ip = None, Browser = None, Aparelho = None, Timestamp = None):
@@ -298,3 +392,89 @@ def lista_vizualizacoes_de_usuario(conn, id_user):
         res = cursor.fetchall()
         Posts = tuple(x[0] for x in res)
         return Posts
+
+def quantidade_de_tipo_de_aparelho_por_browser(conn):
+    with conn.cursor() as cursor:
+        cursor.execute('''
+        SELECT 
+        Browser,
+        Aparelho,
+        Count(*)
+        FROM 
+        Post_visualizar_User 
+        GROUP BY Aparelho,Browser
+        ''' )
+        res = cursor.fetchall()
+        return res
+
+#FUNÇÕES CURTIDAS
+
+def like_post(conn, user, post):
+    with conn.cursor() as cursor:
+        try:
+            cursor.execute('INSERT INTO usuario_curte_post (User_idUser, Post_idPost, estado) VALUES (%s,%s,1)', (user, post))
+        except pymysql.err.IntegrityError as e:
+            raise ValueError(f'Não posso inserir a curtida de {user} em {post} na tabela usuario_curte_post')    
+
+def dislike_post(conn, user, post):
+    with conn.cursor() as cursor:
+        try:
+            cursor.execute('INSERT INTO usuario_curte_post (User_idUser, Post_idPost, estado) VALUES (%s,%s,-1)', (user, post))
+        except pymysql.err.IntegrityError as e:
+            raise ValueError(f'Não posso inserir a descurtida de {user} em {post} na tabela usuario_curte_post')    
+
+def muda_para_like(conn, user, post):
+    with conn.cursor() as cursor:
+        try:
+            cursor.execute('UPDATE usuario_curte_post SET estado=1 WHERE User_idUser=%s and Post_idPost=%s', (user, post))
+        except pymysql.err.IntegrityError as e:
+            raise ValueError(f'Não foi possível curtir o Post de id: {post} para {user}')  
+
+def muda_para_dislike(conn, user, post):
+    with conn.cursor() as cursor:
+        try:
+            cursor.execute('UPDATE usuario_curte_post SET estado=-1 WHERE User_idUser=%s and Post_idPost=%s', (user, post))
+        except pymysql.err.IntegrityError as e:
+            raise ValueError(f'Não foi possível descurtir o Post de id: {post} para {user}')  
+
+def zera_estado_da_curtida(conn, user, post):
+    with conn.cursor() as cursor:
+        try:
+            cursor.execute('UPDATE usuario_curte_post SET estado=0 WHERE User_idUser=%s and Post_idPost=%s', (user, post))
+        except pymysql.err.IntegrityError as e:
+            raise ValueError(f'Não foi possível remover a iteração do Post de id: {post} para {user}')  
+
+def acha_curtida_de_usuario_em_post(conn, user, post):
+        with conn.cursor() as cursor:
+            cursor.execute('SELECT estado FROM usuario_curte_post WHERE (Post_idPost=%s) AND (User_idUser=%s)', (post,user))
+            res = cursor.fetchone()
+            if res:
+                return res[0]
+            else:
+                return None    
+
+def conta_likes_em_post(conn, post):
+    with conn.cursor() as cursor:
+        cursor.execute('''
+        SELECT 
+        Count(*)
+        FROM 
+        usuario_curte_post 
+        WHERE estado=1
+        ''' )
+        res = cursor.fetchall()
+        likes = tuple(x[0] for x in res)
+        return likes
+
+def conta_dislikes_em_post(conn, post):
+    with conn.cursor() as cursor:
+        cursor.execute('''
+        SELECT 
+        Count(*)
+        FROM 
+        usuario_curte_post 
+        WHERE estado=-1
+        ''' )
+        res = cursor.fetchall()
+        dislikes = tuple(x[0] for x in res)
+        return dislikes
