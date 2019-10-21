@@ -3,3 +3,8 @@ Modelo Entidade-Realacionamento
 
 
 ![](Diagrama.jpeg)
+
+Schema
+
+
+![](Schema.png)
