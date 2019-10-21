@@ -102,11 +102,11 @@ def edita_post(post: PostEdit):
 
 @app.get("/Posts")
 def get_all_Posts(req: Request):
-    ipdevice = req.client.host
-    devicebrowserinfo = req.headers["user-agent"].split()
+    #ipdevice = req.client.host
+    #devicebrowserinfo = req.headers["user-agent"].split()
     #print("Esse é o primeiro {0}".format("".join(devicebrowserinfo[-3:-1])))
     #print("Esse é o segundo {0}".format(devicebrowserinfo[1]))
-    adiciona_vizualizacao_em_post(conn, acha_usuario_aleatorio(conn), Post_id, ipdevice, "".join(devicebrowserinfo[-3:-1]), devicebrowserinfo[1])
+    #adiciona_vizualizacao_em_post(conn, acha_usuario_aleatorio(conn), Post_id, ipdevice, "".join(devicebrowserinfo[-3:-1]), devicebrowserinfo[1])
     return lista_posts(conn)
 
 @app.get("/Posts/{Post_id}")
