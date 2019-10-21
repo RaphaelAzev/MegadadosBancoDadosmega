@@ -44,9 +44,9 @@ def acha_usuario(conn, nome):
             return None
 def acha_usuario_aleatorio(conn):
     with conn.cursor() as cursor:
-        cursor.execute('SELECT * FROM user ORDER BY RAND() LIMIT 1')
+        cursor.execute('SELECT idUser FROM user ORDER BY RAND() LIMIT 1')
         res = cursor.fetchone()
-        return res
+        return res[0]
 
 def muda_nome_usuario(conn, id, novo_nome):
     with conn.cursor() as cursor:
@@ -459,13 +459,14 @@ def quantidade_de_tipo_de_aparelho_por_browser(conn):
     with conn.cursor() as cursor:
         cursor.execute('''
         SELECT 
-        Browser,
-        Aparelho,
-        Count(*)
+            Browser,
+            Aparelho,
+            Count(*)
         FROM 
-        Post_visualizar_User 
-        GROUP BY Aparelho,Browser
-        ''' )
+            Post_visualizar_User 
+        GROUP BY 
+            Aparelho,
+            Browser''')
         res = cursor.fetchall()
         return res
 

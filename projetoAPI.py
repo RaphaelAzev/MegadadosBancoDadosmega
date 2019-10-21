@@ -101,16 +101,21 @@ def edita_post(post: PostEdit):
     pass 
 
 @app.get("/Posts")
-def get_all_Posts():
+def get_all_Posts(req: Request):
+    ipdevice = req.client.host
+    devicebrowserinfo = req.headers["user-agent"].split()
+    #print("Esse é o primeiro {0}".format("".join(devicebrowserinfo[-3:-1])))
+    #print("Esse é o segundo {0}".format(devicebrowserinfo[1]))
+    adiciona_vizualizacao_em_post(conn, acha_usuario_aleatorio(conn), Post_id, ipdevice, "".join(devicebrowserinfo[-3:-1]), devicebrowserinfo[1])
     return lista_posts(conn)
 
 @app.get("/Posts/{Post_id}")
 def get_Post(Post_id: int, req: Request):
-    #ipdevice = req.client.host
-    #devicebrowserinfo = req.headers["user-agent"].split()
+    ipdevice = req.client.host
+    devicebrowserinfo = req.headers["user-agent"].split()
     #print("Esse é o primeiro {0}".format("".join(devicebrowserinfo[-3:-1])))
     #print("Esse é o segundo {0}".format(devicebrowserinfo[1]))
-    #adiciona_vizualizacao_em_post(conn, acha_usuario_aleatorio(conn), Post_id, ipdevice, "", "devicebrowserinfo[1]")
+    adiciona_vizualizacao_em_post(conn, acha_usuario_aleatorio(conn), Post_id, ipdevice, "".join(devicebrowserinfo[-3:-1]), devicebrowserinfo[1])
     return acha_tudo_post_porid(conn, Post_id)
 
 @app.delete("/Posts/{Post_id}")
@@ -159,3 +164,8 @@ def remove_like_dislike(like: LikePost):
 @app.get("/Likes/{user_id}")
 def acha_likes_user(user_id: int):
     return acha_curtidas_de_usuario(conn, user_id)
+
+#Tabela Cruzada para saber qnt de Aparelhos e Browsers
+@app.get("/VizualizacaoCruzada")
+def tabela_cruzada():
+    return quantidade_de_tipo_de_aparelho_por_browser(conn)
