@@ -1,0 +1,7 @@
+USE `mydb`;
+
+ALTER TABLE Post_visualizar_User
+DROP COLUMN TimeStamp;
+
+ALTER TABLE Post_visualizar_User
+ADD COLUMN TimeStampView TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
